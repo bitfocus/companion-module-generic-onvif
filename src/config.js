@@ -1,0 +1,111 @@
+const { Regex } = require('@companion-module/base')
+
+module.exports = {
+	getConfigFields() {
+		return [
+			{
+				type: 'static-text',
+				id: 'info',
+				width: 12,
+				label: 'Information',
+				value: 'This module controls cameras using the ONVIF protocol.',
+			},
+			{
+				type: 'textinput',
+				id: 'host',
+				label: 'IP',
+				width: 4,
+				default: '',
+				regex: Regex.IP,
+			},
+			{
+				type: 'textinput',
+				id: 'username',
+				label: 'Username',
+				width: 4,
+				default: 'admin',
+			},
+			{
+				type: 'textinput',
+				id: 'password',
+				label: 'Password',
+				width: 4,
+				default: 'admin',
+			},
+			{
+				type: 'static-text',
+				id: 'hr1',
+				width: 12,
+				label: ' ',
+				value: '<hr />',
+			},
+			{
+				type: 'textinput',
+				id: 'path',
+				label: 'ONVIF Device Path',
+				width: 6,
+				default: '/onvif/device_service',
+			},
+			{
+				type: 'static-text',
+				id: 'pathInfo',
+				width: 6,
+				label: '',
+				value: 'The path to the ONVIF device service. The default is usually fine, but you can customize it here if needed.',
+			},
+			{
+				type: 'static-text',
+				id: 'hr2',
+				width: 12,
+				label: ' ',
+				value: '<hr />',
+			},
+			{
+				type: 'checkbox',
+				id: 'polling',
+				width: 3,
+				label: 'Enable Polling',
+				default: true,
+			},
+			{
+				type: 'static-text',
+				id: 'intervalInfo',
+				width: 12,
+				label: 'Update Interval',
+				value: 'Enter the amount of time in milliseconds to request new information from the camera.',
+				isVisible: (config) => config.polling == true,
+			},
+			{
+				type: 'number',
+				id: 'interval',
+				label: 'Update Interval',
+				width: 3,
+				default: 5000,
+				min: 100,
+				max: 60000,
+				isVisible: (config) => config.polling == true,
+			},
+			{
+				type: 'static-text',
+				id: 'hr3',
+				width: 12,
+				label: ' ',
+				value: '<hr />',
+			},
+			{
+				type: 'checkbox',
+				id: 'verbose',
+				width: 3,
+				label: 'Verbose Mode',
+				default: true,
+			},
+			{
+				type: 'static-text',
+				id: 'verboseInfo',
+				width: 9,
+				label: '',
+				value: 'When enabled, the module will log additional information to the console.',
+			},
+		]
+	},
+}
