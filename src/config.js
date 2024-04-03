@@ -20,6 +20,14 @@ module.exports = {
 			},
 			{
 				type: 'textinput',
+				id: 'port',
+				label: 'Port',
+				width: 4,
+				default: '80',
+				regex: Regex.PORT,
+			},
+			{
+				type: 'textinput',
 				id: 'username',
 				label: 'Username',
 				width: 4,

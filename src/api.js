@@ -8,6 +8,10 @@ module.exports = {
 
 		clearInterval(self.pollingInterval)
 
+		if (self.config.port == undefined) {
+			self.config.port = 80
+		}
+
 		if (
 			self.config.host &&
 			self.config.host !== '' &&
@@ -22,6 +26,7 @@ module.exports = {
 					username: self.config.username,
 					password: self.config.password,
 					path: self.config.path,
+					port: self.config.port,
 				},
 				function (err) {
 					if (err) {
