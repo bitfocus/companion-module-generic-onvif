@@ -7,6 +7,7 @@ module.exports = {
 		let self = this
 
 		clearInterval(self.pollingInterval)
+		clearTimeout(self.reconnectTimeout)
 
 		if (self.config.port == undefined) {
 			self.config.port = 80
@@ -36,6 +37,10 @@ module.exports = {
 							'error',
 							'Check your ONVIF device configuration. The authentication mode should be set to "digest/wsse".'
 						)
+						const interval = self.config.reconnectInterval ?? 30
+						if (interval === 0) return
+						self.log('info', `Retrying connection in ${interval} seconds...`)
+						self.reconnectTimeout = setTimeout(() => self.initConnection(), interval * 1000)
 						return
 					}
 
