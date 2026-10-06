@@ -1,11 +1,12 @@
 {
 	"name": "generic-onvif",
-	"version": "1.1.0",
+	"version": "2.0.0",
 	"main": "src/index.js",
+	"type": "module",
 	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1",
 		"format": "prettier -w .",
-		"lint:raw": "eslint --ext .ts --ext .js --ignore-pattern dist --ignore-pattern pkg",
+		"package": "companion-module-build",
+		"lint:raw": "eslint",
 		"lint": "yarn lint:raw ."
 	},
 	"license": "MIT",
@@ -13,12 +14,17 @@
 		"type": "git",
 		"url": "git+https://github.com/bitfocus/companion-module-generic-onvif.git"
 	},
+	"engines": {
+		"node": "^22.20"
+	},
 	"dependencies": {
-		"@companion-module/base": "^1.7.0",
+		"@companion-module/base": "~2.0.4",
 		"onvif": "^0.6.9"
 	},
 	"devDependencies": {
-		"@companion-module/tools": "^2.8.0"
+		"@companion-module/tools": "^3.1.1",
+		"eslint": "^10.2.0",
+		"prettier": "^3.8.3"
 	},
 	"prettier": "@companion-module/tools/.prettierrc.json",
 	"lint-staged": {

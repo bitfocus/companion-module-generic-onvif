@@ -1,3 +1,3 @@
-# companion-module-canon-ptz
+# companion-module-generic-onvif
 
-See HELP.md and LICENSE
+See [HELP.md](./companion/HELP.md) and [LICENSE](./LICENSE)
