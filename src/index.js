@@ -39,8 +39,13 @@ export default class onvifInstance extends InstanceBase {
 			presets: [],
 			imagingSettings: {},
 			focusMoveOptions: {},
+			focusStatus: {},
+			presetPositions: {},
 			lastPreset: undefined,
 		}
+
+		// The progress of saving each preset, by preset token, used by the Preset Save Status feedback
+		this.PRESET_SAVE = new Map()
 
 		// The speeds (%) used by the presets, adjusted with the Set Pan/Tilt Speed and Set Zoom Speed actions
 		this.SPEED = {
@@ -54,6 +59,7 @@ export default class onvifInstance extends InstanceBase {
 	async destroy() {
 		clearInterval(this.pollingInterval)
 		clearTimeout(this.reconnectTimeout)
+		for (const save of this.PRESET_SAVE.values()) clearTimeout(save.timeout)
 	}
 
 	async init(config) {

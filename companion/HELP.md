@@ -54,6 +54,8 @@ It is recommended to use the presets as much as possible as there are a lot of a
     - Optionally specify a speed, or leave at 0 to use the speed configured on the camera
 - Set Preset
     - Saves the current position to a preset. Leave the name blank to keep the current name of the preset.
+- Clear Preset Save Status
+    - Clears the Preset Save Status feedback. The Recall/Save Preset button runs this when it is released after saving.
 
 ### Imaging Functions
 
@@ -72,6 +74,10 @@ It is recommended to use the presets as much as possible as there are a lot of a
 - Focus Mode (Auto/Manual/Toggle)
 - Focus Near/Far/Stop
     - Most cameras need to be in manual focus mode for these to work
+- Set Focus Position
+    - Move the focus to a specific position, within the range given by the `focus_position_min` and `focus_position_max` variables
+    - Not every camera supports this. Use the **Focus Move Supported** feedback to check, or see if the range variables have a value
+    - Most cameras need to be in manual focus mode for this to work
 - IR Cut Filter
 
 ## Feedbacks
@@ -80,8 +86,16 @@ It is recommended to use the presets as much as possible as there are a lot of a
 - Camera is Zooming
 - Preset was Last Recalled
     - Cleared when the camera is moved by another action
+- Camera is at Preset
+    - If the camera reports the position stored in each preset and polling is enabled, this compares it to the current position, so it also notices when the camera is moved by something other than Companion. A recalled preset also counts while the camera is still moving to it
+    - Otherwise this is the same as Preset was Last Recalled
+    - Increase the Position Tolerance if the camera stops slightly off the stored position
+- Preset Save Status (Saving/Saved/Failed)
+    - Shown until the Clear Preset Save Status action runs, or for 10 seconds
 - Speed Matches Value
 - Focus Mode
+- Focus Move Supported
+    - Whether the camera reports support for setting a focus position (absolute), or for Focus Near/Far (continuous)
 - Exposure Mode
 - IR Cut Filter
 
@@ -100,6 +114,9 @@ It is recommended to use the presets as much as possible as there are a lot of a
 - Pan/Tilt Speed and Zoom Speed (`pt_speed`, `zoom_speed`)
 - Brightness, Color Saturation, Contrast, Sharpness
 - Exposure Mode, Focus Mode, IR Cut Filter
+- Focus Position and Move Status (`focus_position`, `focus_move_status`)
+- Focus Position Minimum/Maximum (`focus_position_min`, `focus_position_max`)
+    - Empty when the camera does not support setting a focus position
 - Number of Presets (`preset_count`)
 - Last Recalled Preset token and name (`last_preset`, `last_preset_name`)
 - Preset Names
@@ -112,9 +129,13 @@ It is recommended to use the presets as much as possible as there are a lot of a
 - **Zoom**: Zoom In/Out
 - **Speed**: Increase/decrease/reset the Pan/Tilt and Zoom speeds, a version for rotary encoders, and buttons for common speeds
 - **Camera Presets**: Generated from the presets stored on the camera
+    - Recall/Save buttons recall the preset when pressed, or save the current position to it when held for 2 seconds
+        - The preset is recalled when the button is released, so that a long press doesn't recall it first
+        - Green when the camera is at the preset (see the Camera is at Preset feedback)
+        - After saving, the button shows SAVED in green, or SAVE FAILED in red, until it is released
     - Recall buttons show the name of the preset on the camera, and are highlighted when that preset was the last one recalled
-    - Save buttons store the current position to the preset when held for 2 seconds
+    - Save buttons store the current position to the preset when held for 2 seconds, and show SAVED until they are released
     - To point a button at a different preset, change its `preset` local variable
-- **Focus**: Focus Near/Far, Auto Focus, Manual Focus
+- **Focus**: Focus Near/Far, Auto Focus, Manual Focus, and the Focus Position (green when the camera supports the Set Focus Position action)
 - **Exposure**: Auto Exposure, Manual Exposure
 - **Status**: Camera model, moving indicator and PTZ position

@@ -32,6 +32,10 @@ export function initVariables() {
 	variables.sharpness = { name: 'Sharpness' }
 	variables.exposure_mode = { name: 'Exposure Mode' }
 	variables.focus_mode = { name: 'Focus Mode' }
+	variables.focus_position = { name: 'Focus Position' }
+	variables.focus_position_min = { name: 'Focus Position Minimum (empty if setting a focus position is unsupported)' }
+	variables.focus_position_max = { name: 'Focus Position Maximum (empty if setting a focus position is unsupported)' }
+	variables.focus_move_status = { name: 'Move Status Focus' }
 	variables.ir_cut_filter = { name: 'IR Cut Filter' }
 
 	//Preset Information
@@ -83,6 +87,12 @@ export function checkVariables() {
 		variableValues.sharpness = imaging?.sharpness ?? ''
 		variableValues.exposure_mode = imaging?.exposure?.mode || ''
 		variableValues.focus_mode = imaging?.focus?.autoFocusMode || ''
+
+		let focusRange = self.getFocusPositionRange()
+		variableValues.focus_position = self.DATA?.focusStatus?.position ?? ''
+		variableValues.focus_position_min = focusRange?.min ?? ''
+		variableValues.focus_position_max = focusRange?.max ?? ''
+		variableValues.focus_move_status = self.DATA?.focusStatus?.moveStatus || ''
 		variableValues.ir_cut_filter = imaging?.irCutFilter || ''
 
 		variableValues.preset_count = self.hasCameraPresets() ? self.CHOICES_PRESETS.length : 0

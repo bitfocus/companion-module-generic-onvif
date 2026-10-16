@@ -345,16 +345,71 @@ export function initPresets() {
 			localVariables: [{ variableType: 'simple', variableName: 'preset', startupValue: firstPreset }],
 		}
 
+		const saveAction = { actionId: 'setPreset', options: { preset: presetExpression, presetName: '' } }
+		// Companion runs the longest release group that the press exceeded, and skips it if it already ran while held.
+		// So a group just after the save only runs when the button is released after saving, which clears the saved state.
+		const clearSaveStatus = [{ actionId: 'clearPresetSaveStatus', options: { preset: presetExpression } }]
+		const saveFeedbacks = [
+			{
+				feedbackId: 'presetSaveStatus',
+				options: { preset: presetExpression, state: 'saved' },
+				style: { text: `SAVED\\n${presetName}`, color: WHITE, bgcolor: GREEN },
+			},
+			{
+				feedbackId: 'presetSaveStatus',
+				options: { preset: presetExpression, state: 'failed' },
+				style: { text: 'SAVE\\nFAILED', color: WHITE, bgcolor: RED },
+			},
+		]
+
+		presets.cameraPresetRecallSave = {
+			type: 'simple',
+			name: 'Recall/Save Preset',
+			style: textStyle(presetName, 'auto'),
+			steps: [
+				{
+					down: [],
+					up: [{ actionId: 'recallPreset', options: { preset: presetExpression, speed: 0 } }],
+					[HOLD_DURATION]: { options: { runWhileHeld: true }, actions: [saveAction] },
+					[HOLD_DURATION + 1]: clearSaveStatus,
+				},
+			],
+			feedbacks: [
+				{
+					feedbackId: 'cameraAtPreset',
+					options: { preset: presetExpression, tolerance: 0.01 },
+					style: { color: WHITE, bgcolor: GREEN },
+				},
+				...saveFeedbacks,
+			],
+			localVariables: [{ variableType: 'simple', variableName: 'preset', startupValue: firstPreset }],
+		}
+
 		presets.cameraPresetSave = longPressPreset(
 			'Save Preset (hold to save)',
 			textStyle(`SAVE\\n${presetName}`, 'auto', DARK_RED),
-			{ actionId: 'setPreset', options: { preset: presetExpression, presetName: '' } },
+			saveAction,
 		)
+		presets.cameraPresetSave.steps[0][HOLD_DURATION + 1] = clearSaveStatus
+		presets.cameraPresetSave.feedbacks = saveFeedbacks
 		presets.cameraPresetSave.localVariables = [
 			{ variableType: 'simple', variableName: 'preset', startupValue: firstPreset },
 		]
 
 		cameraPresetDefinitions.unshift(
+			{
+				id: 'recall-save',
+				type: 'template',
+				name: 'Recall/Save Preset',
+				description:
+					'Press to recall the preset, or hold for 2 seconds to save the current camera position to it. The button turns green when the camera is at the preset, and shows SAVED until it is released after saving.',
+				presetId: 'cameraPresetRecallSave',
+				templateVariableName: 'preset',
+				templateValues: self.CHOICES_PRESETS.map((choice) => ({
+					name: `Recall/Save ${choice.label}`,
+					value: sanitizePresetToken(choice.id),
+				})),
+			},
 			{
 				id: 'recall',
 				type: 'template',
@@ -419,11 +474,26 @@ export function initPresets() {
 		}
 	}
 
+	presets.focusPosition = {
+		type: 'simple',
+		name: 'Focus Position',
+		style: textStyle('FOCUS\\n$(onvif:focus_position)', 'auto'),
+		steps: [],
+		feedbacks: [
+			{
+				feedbackId: 'focusMoveSupported',
+				options: { type: 'absolute' },
+				style: { color: WHITE, bgcolor: GREEN },
+			},
+		],
+	}
+
 	structure.push({
 		id: 'focus',
 		name: 'Focus',
-		description: 'Hold Focus Near/Far to adjust the focus. Most cameras need to be in manual focus mode for this.',
-		definitions: ['focusNear', 'focusFar', 'focusAuto', 'focusManual'],
+		description:
+			'Hold Focus Near/Far to adjust the focus. Most cameras need to be in manual focus mode for this. Focus Position is green when the camera supports the Set Focus Position action.',
+		definitions: ['focusNear', 'focusFar', 'focusAuto', 'focusManual', 'focusPosition'],
 	})
 
 	// Exposure

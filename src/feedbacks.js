@@ -90,6 +90,67 @@ export function initFeedbacks() {
 		},
 	}
 
+	feedbacks.cameraAtPreset = {
+		type: 'boolean',
+		name: 'Camera is at Preset',
+		description:
+			'Indicate if the camera is at the selected preset. If the camera reports the position stored in each preset and polling is enabled, this compares it to the current position. Otherwise it shows the last recalled preset.',
+		defaultStyle: {
+			color: foregroundColor,
+			bgcolor: backgroundColorGreen,
+		},
+		options: [
+			presetOption(self.CHOICES_PRESETS),
+			{
+				type: 'number',
+				label: 'Position Tolerance',
+				id: 'tolerance',
+				default: 0.01,
+				min: 0,
+				max: 1,
+				step: 0.001,
+				clampValues: true,
+				tooltip:
+					'How far the pan, tilt and zoom positions can be from the preset and still count as being at it. Increase this if the camera stops slightly off the stored position.',
+			},
+		],
+		callback: function (feedback) {
+			let opt = feedback.options
+
+			return self.isAtPreset(self.resolvePresetToken(opt.preset), opt.tolerance)
+		},
+	}
+
+	feedbacks.presetSaveStatus = {
+		type: 'boolean',
+		name: 'Preset Save Status',
+		description:
+			'Indicate the progress of saving a preset. This is shown until the Clear Preset Save Status action runs (the Recall/Save Preset button does this when it is released), or for 10 seconds.',
+		defaultStyle: {
+			color: foregroundColor,
+			bgcolor: backgroundColorGreen,
+		},
+		options: [
+			presetOption(self.CHOICES_PRESETS),
+			{
+				type: 'dropdown',
+				label: 'State',
+				id: 'state',
+				default: 'saved',
+				choices: [
+					{ id: 'saving', label: 'Saving' },
+					{ id: 'saved', label: 'Saved' },
+					{ id: 'failed', label: 'Failed' },
+				],
+			},
+		],
+		callback: function (feedback) {
+			let opt = feedback.options
+
+			return self.PRESET_SAVE.get(self.resolvePresetToken(opt.preset))?.state === opt.state
+		},
+	}
+
 	feedbacks.speed = {
 		type: 'boolean',
 		name: 'Speed Matches Value',
@@ -149,6 +210,31 @@ export function initFeedbacks() {
 		],
 		callback: function (feedback) {
 			return self.DATA?.imagingSettings?.focus?.autoFocusMode === feedback.options.mode
+		},
+	}
+
+	feedbacks.focusMoveSupported = {
+		type: 'boolean',
+		name: 'Focus Move Supported',
+		description: 'Indicate if the camera reports support for the selected type of focus move',
+		defaultStyle: {
+			color: foregroundColor,
+			bgcolor: backgroundColorGreen,
+		},
+		options: [
+			{
+				type: 'dropdown',
+				label: 'Type',
+				id: 'type',
+				default: 'absolute',
+				choices: [
+					{ id: 'absolute', label: 'Absolute (Set Focus Position)' },
+					{ id: 'continuous', label: 'Continuous (Focus Near/Far)' },
+				],
+			},
+		],
+		callback: function (feedback) {
+			return self.isFocusMoveSupported(feedback.options.type)
 		},
 	}
 

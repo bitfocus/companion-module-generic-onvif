@@ -445,6 +445,16 @@ export function initActions() {
 		},
 	}
 
+	actions.clearPresetSaveStatus = {
+		name: 'Clear Preset Save Status',
+		description:
+			'Clear the Preset Save Status feedback for a preset. The Recall/Save Preset button runs this when it is released after saving.',
+		options: [presetOption(self.CHOICES_PRESETS)],
+		callback: async function (action) {
+			self.setPresetSaveState(self.resolvePresetToken(action.options.preset), undefined)
+		},
+	}
+
 	//Imaging Functions
 
 	actions.setBrightness = {
@@ -665,6 +675,35 @@ export function initActions() {
 		options: [speedOption('speed', 'Focus Speed (%)')],
 		callback: async function (action) {
 			self.focusMove(1, action.options.speed)
+		},
+	}
+
+	const focusRange = self.getFocusPositionRange()
+
+	actions.focusPosition = {
+		name: 'Set Focus Position',
+		description:
+			'Move the focus to a specific position. Not every camera supports this (see the Focus Move Supported feedback), and most require manual focus mode for it to work.',
+		options: [
+			{
+				type: 'number',
+				label: 'Position',
+				id: 'position',
+				default: focusRange?.min ?? 0,
+				// The range differs between cameras, so allow anything until the camera has reported it
+				min: focusRange?.min ?? -100000,
+				max: focusRange?.max ?? 100000,
+				clampValues: true,
+				tooltip: focusRange
+					? `This camera supports positions from ${focusRange.min} to ${focusRange.max}. The current position is available in the focus_position variable.`
+					: 'The camera has not reported a range of focus positions, so it may not support this action.',
+				expressionDescription:
+					'Should result in a position between the focus_position_min and focus_position_max variables. Values outside this range are clamped.',
+			},
+			speedOption('speed', 'Focus Speed (%)'),
+		],
+		callback: async function (action) {
+			self.focusMoveAbsolute(action.options.position, action.options.speed)
 		},
 	}
 

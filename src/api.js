@@ -1,8 +1,12 @@
 import { InstanceStatus } from '@companion-module/base'
 import onvif from 'onvif'
+import onvifUtils from 'onvif/lib/utils.js'
 import { clampSpeed, percentToVelocity, sanitizePresetToken } from './utils.js'
 
 const { Cam } = onvif
+
+// How long the result of saving a preset is shown for, if the button that saved it is never released
+const PRESET_SAVE_TIMEOUT = 10000
 
 export function initConnection() {
 	let self = this
@@ -60,6 +64,7 @@ export function initConnection() {
 
 				self.getImagingSettings()
 				self.getFocusMoveOptions()
+				self.getFocusStatus()
 				self.startPolling()
 			},
 		)
@@ -132,7 +137,7 @@ export function getStatus() {
 		}
 
 		self.DATA.status = status
-		self.checkFeedbacks('isMoving', 'isZooming')
+		self.checkFeedbacks('isMoving', 'isZooming', 'cameraAtPreset')
 		self.checkVariables()
 	})
 }
@@ -153,13 +158,19 @@ export function getNodes() {
 export function getPresets() {
 	let self = this
 
-	self.DEVICE.getPresets((err, presets) => {
+	self.DEVICE.getPresets((err, presets, xml) => {
 		if (err) {
 			//self.log('error', 'Error getting presets: ' + String(err))
 			return
 		}
 
 		self.DATA.presets = presets
+
+		const positions = parsePresetPositions(xml)
+		if (JSON.stringify(positions) !== JSON.stringify(self.DATA.presetPositions)) {
+			self.DATA.presetPositions = positions
+			self.checkFeedbacks('cameraAtPreset')
+		}
 
 		//build choices_presets array with key/value pairs
 		//save copy of current array to compare for changes
@@ -187,10 +198,11 @@ export function getPresets() {
 }
 
 /**
- * Whether presets have been loaded from the camera (rather than the placeholder choice)
+ * Whether presets have been loaded from the camera (rather than the placeholder choice).
+ * Checks the presets themselves, as cameras can use 0 as a preset token, which is also the id of the placeholder.
  */
 export function hasCameraPresets() {
-	return this.CHOICES_PRESETS.length > 0 && this.CHOICES_PRESETS[0].id !== 0
+	return Object.keys(this.DATA.presets ?? {}).length > 0
 }
 
 /**
@@ -223,8 +235,93 @@ export function setLastPreset(token) {
 	if (self.DATA.lastPreset === token) return
 
 	self.DATA.lastPreset = token
-	self.checkFeedbacks('presetActive')
+	self.checkFeedbacks('presetActive', 'cameraAtPreset')
 	self.checkVariables()
+}
+
+/**
+ * Read the position stored in each preset, as the onvif library only returns the names and tokens.
+ * Not every camera includes the position, so presets without one are left out.
+ * @returns {Record<string, { x?: number, y?: number, zoom?: number }>}
+ */
+function parsePresetPositions(xml) {
+	let positions = {}
+
+	onvifUtils.parseSOAPString(String(xml ?? ''), (err, data) => {
+		if (err) return
+
+		let presets = onvifUtils.linerase(data)?.getPresetsResponse?.preset ?? []
+		if (!Array.isArray(presets)) presets = [presets]
+
+		for (const preset of presets) {
+			const token = preset?.$?.token
+			const ptzPosition = preset?.PTZPosition
+			if (token === undefined || !ptzPosition) continue
+
+			let position = {}
+			for (const [axis, value] of [
+				['x', ptzPosition.panTilt?.$?.x],
+				['y', ptzPosition.panTilt?.$?.y],
+				['zoom', ptzPosition.zoom?.$?.x],
+			]) {
+				const number = parseFloat(value)
+				if (!isNaN(number)) position[axis] = number
+			}
+
+			if (Object.keys(position).length > 0) positions[String(token)] = position
+		}
+	})
+
+	return positions
+}
+
+/**
+ * Whether the camera is at a preset.
+ * When the camera reports the position stored in the preset this compares it to the current position,
+ * otherwise it falls back to whether the preset was the last one recalled.
+ * @param {string} token
+ * @param {number} tolerance The largest difference on each axis that still counts as being at the preset
+ */
+export function isAtPreset(token, tolerance) {
+	let self = this
+
+	const lastRecalled = self.DATA.lastPreset !== undefined && String(self.DATA.lastPreset) === String(token)
+	const presetPosition = self.DATA.presetPositions?.[String(token)]
+	const status = self.DATA.status
+
+	// Without polling the current position isn't kept up to date, so it can't be compared
+	if (!self.config?.polling || !presetPosition || !status?.position) return lastRecalled
+
+	const matches = Object.entries(presetPosition).every(
+		([axis, value]) => Math.abs(Number(status.position[axis]) - value) <= Number(tolerance),
+	)
+	if (matches) return true
+
+	// Treat a preset that was just recalled as active while the camera moves to it
+	const moving = status.moveStatus?.panTilt === 'MOVING' || status.moveStatus?.zoom === 'MOVING'
+	return lastRecalled && moving
+}
+
+/**
+ * Track the progress of saving a preset, for the Preset Save Status feedback
+ * @param {string} token
+ * @param {'saving' | 'saved' | 'failed' | undefined} state undefined to clear it
+ */
+export function setPresetSaveState(token, state) {
+	let self = this
+
+	token = String(token)
+	clearTimeout(self.PRESET_SAVE.get(token)?.timeout)
+
+	if (state) {
+		// Clear it eventually, in case the save wasn't made by a button that clears it on release
+		const timeout = setTimeout(() => self.setPresetSaveState(token, undefined), PRESET_SAVE_TIMEOUT)
+		self.PRESET_SAVE.set(token, { state: state, timeout: timeout })
+	} else {
+		self.PRESET_SAVE.delete(token)
+	}
+
+	self.checkFeedbacks('presetSaveStatus')
 }
 
 export function getImagingSettings() {
@@ -254,12 +351,54 @@ export function getFocusMoveOptions() {
 	let self = this
 
 	self.DEVICE.imagingGetMoveOptions((err, options) => {
+		// Focus moves are optional, fall back to the default speed range if the camera doesn't report any
+		const previous = JSON.stringify(self.DATA.focusMoveOptions)
+		self.DATA.focusMoveOptions = (!err && options) || {}
+
+		// The Set Focus Position action shows the position range of the camera, so rebuild it if this has changed
+		if (JSON.stringify(self.DATA.focusMoveOptions) !== previous) {
+			self.initActions()
+		}
+
+		self.checkFeedbacks('focusMoveSupported')
+		self.checkVariables()
+	})
+}
+
+/**
+ * Whether the camera reports support for a type of focus move
+ * @param {'absolute' | 'continuous'} type
+ */
+export function isFocusMoveSupported(type) {
+	return this.DATA.focusMoveOptions?.[type] !== undefined
+}
+
+/**
+ * The range of focus positions reported by the camera, or undefined if it does not support absolute focus moves
+ * @returns {{ min: number, max: number } | undefined}
+ */
+export function getFocusPositionRange() {
+	const range = this.DATA.focusMoveOptions?.absolute?.position
+	const min = parseFloat(range?.min)
+	const max = parseFloat(range?.max)
+	if (isNaN(min) || isNaN(max)) return undefined
+
+	return { min: Math.min(min, max), max: Math.max(min, max) }
+}
+
+export function getFocusStatus() {
+	let self = this
+
+	if (!self.DEVICE) return
+
+	self.DEVICE.imagingGetStatus((err, status) => {
 		if (err) {
-			// Focus moves are optional, fall back to the default speed range
+			// Not every device reports the focus status
 			return
 		}
 
-		self.DATA.focusMoveOptions = options ?? {}
+		self.DATA.focusStatus = status?.focusStatus20 ?? {}
+		self.checkVariables()
 	})
 }
 
@@ -272,6 +411,7 @@ export function startPolling() {
 			self.getPresets()
 			if (self.imagingSupported) {
 				self.getImagingSettings()
+				self.getFocusStatus()
 			}
 		}, self.config.interval)
 	}
@@ -380,6 +520,9 @@ export function gotoPreset(options) {
 			}
 
 			self.setLastPreset(options.preset)
+
+			// Refresh the status straight away, so that the camera is shown as moving to the preset
+			self.getStatus()
 		})
 	}
 }
@@ -388,13 +531,21 @@ export function setPreset(options) {
 	let self = this
 
 	if (self.DEVICE) {
+		const token = String(options.presetToken)
+		self.setPresetSaveState(token, 'saving')
+
 		self.DEVICE.setPreset(options, (err) => {
+			// Only show the result if the button that saved the preset is still held
+			const held = self.PRESET_SAVE.has(token)
+
 			if (err) {
 				self.log('error', 'Error setting preset: ' + String(err))
+				if (held) self.setPresetSaveState(token, 'failed')
 				return
 			}
 
 			self.log('info', `Preset "${options.presetName}" saved`)
+			if (held) self.setPresetSaveState(token, 'saved')
 
 			self.getPresets()
 		})
@@ -459,12 +610,54 @@ export function focusMove(direction, speed) {
 	}
 }
 
+/**
+ * Move the focus to an absolute position
+ * @param {number} position Position within the range reported by the camera
+ * @param {number} speed Speed percentage (1-100)
+ */
+export function focusMoveAbsolute(position, speed) {
+	let self = this
+
+	if (self.DEVICE) {
+		position = Number(position)
+		if (isNaN(position)) {
+			self.log('error', 'Error moving focus: the position is not a number')
+			return
+		}
+
+		const range = self.getFocusPositionRange()
+		if (range) position = Math.min(Math.max(position, range.min), range.max)
+
+		// The position is sent as a string, as the onvif library leaves out a position of 0
+		let absolute = { position: String(position) }
+
+		// The speed is optional, so only send it to cameras which report a speed range for absolute moves
+		const maxSpeed = Math.abs(parseFloat(self.DATA.focusMoveOptions?.absolute?.speed?.max))
+		if (maxSpeed) absolute.speed = percentToVelocity(speed) * maxSpeed
+
+		self.DEVICE.imagingMove({ absolute: absolute }, (err) => {
+			if (!err) return
+
+			const hint = self.isFocusMoveSupported('absolute')
+				? ''
+				: ' (the camera does not report support for setting a focus position)'
+			self.log('error', 'Error moving focus: ' + String(err) + hint)
+		})
+	}
+}
+
 export function focusStop() {
 	let self = this
 
 	if (self.DEVICE) {
 		self.DEVICE.imagingStop({}, (err) => {
-			if (err) self.log('error', 'Error stopping focus: ' + String(err))
+			if (err) {
+				self.log('error', 'Error stopping focus: ' + String(err))
+				return
+			}
+
+			// Refresh the status so that the focus position variable reflects where the focus stopped
+			self.getFocusStatus()
 		})
 	}
 }
