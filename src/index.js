@@ -1,16 +1,18 @@
-const { InstanceBase, runEntrypoint } = require('@companion-module/base')
-const UpgradeScripts = require('./upgrades')
+import { InstanceBase, InstanceStatus } from '@companion-module/base'
+import { UpgradeScripts } from './upgrades.js'
 
-const config = require('./config')
-const actions = require('./actions')
-const feedbacks = require('./feedbacks')
-const variables = require('./variables')
-const presets = require('./presets')
+import * as config from './config.js'
+import * as actions from './actions.js'
+import * as feedbacks from './feedbacks.js'
+import * as variables from './variables.js'
+import * as presets from './presets.js'
 
-const api = require('./api')
-const utils = require('./utils')
+import * as api from './api.js'
+import { DEFAULT_SPEED } from './utils.js'
 
-class onvifInstance extends InstanceBase {
+export { UpgradeScripts }
+
+export default class onvifInstance extends InstanceBase {
 	constructor(internal) {
 		super(internal)
 
@@ -22,7 +24,6 @@ class onvifInstance extends InstanceBase {
 			...variables,
 			...presets,
 			...api,
-			...utils,
 		})
 
 		this.DEVICE = null // The ONVIF device
@@ -36,6 +37,20 @@ class onvifInstance extends InstanceBase {
 			serviceCapabilities: {},
 			status: {},
 			presets: [],
+			imagingSettings: {},
+			focusMoveOptions: {},
+			focusStatus: {},
+			presetPositions: {},
+			lastPreset: undefined,
+		}
+
+		// The progress of saving each preset, by preset token, used by the Preset Save Status feedback
+		this.PRESET_SAVE = new Map()
+
+		// The speeds (%) used by the presets, adjusted with the Set Pan/Tilt Speed and Set Zoom Speed actions
+		this.SPEED = {
+			panTilt: DEFAULT_SPEED,
+			zoom: DEFAULT_SPEED,
 		}
 
 		this.CHOICES_PRESETS = [{ id: 0, label: '(no presets loaded)' }]
@@ -44,14 +59,15 @@ class onvifInstance extends InstanceBase {
 	async destroy() {
 		clearInterval(this.pollingInterval)
 		clearTimeout(this.reconnectTimeout)
+		for (const save of this.PRESET_SAVE.values()) clearTimeout(save.timeout)
 	}
 
 	async init(config) {
-		this.configUpdated(config)
+		await this.configUpdated(config)
 	}
 
 	async configUpdated(config) {
-		this.updateStatus('connecting')
+		this.updateStatus(InstanceStatus.Connecting)
 
 		this.config = config
 
@@ -60,14 +76,9 @@ class onvifInstance extends InstanceBase {
 		this.initVariables()
 		this.initPresets()
 
-		if (this.config.host !== '') {
-			this.updateStatus('Connecting')
-			this.initConnection()
-		}
+		this.initConnection()
 
 		this.checkVariables()
-		this.checkFeedbacks()
+		this.checkAllFeedbacks()
 	}
 }
-
-runEntrypoint(onvifInstance, UpgradeScripts)
